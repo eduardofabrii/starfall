@@ -1,286 +1,350 @@
-let cube;
-let obstacles = [];
-let score = 0;
-let gameOver = false;
-let jumpPower = -12;
-let gravity = 0.6;
-let groundHeight = 50;
-let isJumping = false;
-let gameSpeed = 5;
-let backgroundElements = [];
+// Configurações do jogo
+const GRAVIDADE = 0.6;
+const FORCA_PULO = -12;
+const ALTURA_CHAO = 50;
+const VELOCIDADE_JOGO = 5;
+const QTD_ESTRELAS = 20;
+const INTERVALO_OBSTACULOS = 60; // frames
+
+// Estado do jogo
+let pontuacao = 0;
+let fimDeJogo = false;
+
+// Objetos do jogo
+let cubo;
+let obstaculos = [];
+let estrelas = [];
+let estaPulando = false;
 
 function setup() {
     createCanvas(windowWidth, windowHeight);
-    cube = {
+    
+    // Inicializar o jogador
+    cubo = {
         x: 150,
-        y: height - groundHeight - 30,
-        size: 30,
-        velocity: 0,
-        rotation: 0
+        y: height - ALTURA_CHAO - 30,
+        tamanho: 30,
+        velocidade: 0,
+        rotacao: 0
     };
     
-    // Criar alguns elementos de fundo
-    for (let i = 0; i < 20; i++) {
-        backgroundElements.push({
-            x: random(width),
-            y: random(height - groundHeight),
-            size: random(5, 15)
-        });
-    }
-    
+    criarEstrelas();
     noStroke();
 }
 
+function criarEstrelas() {
+    for (let i = 0; i < QTD_ESTRELAS; i++) {
+        estrelas.push({
+            x: random(width),
+            y: random(height - ALTURA_CHAO),
+            tamanho: random(5, 15)
+        });
+    }
+}
+
 function draw() {
-    background(0, 10, 30); // Fundo azul escuro
+    desenharCenario();
     
-    // Desenhar elementos de fundo (estrelas)
+    if (!fimDeJogo) {
+        atualizarJogo();
+    }
+    
+    desenharCubo();
+    mostrarInformacoes();
+}
+
+function atualizarJogo() {
+    atualizarCubo();
+    
+    // Gerar novo obstáculo periodicamente
+    if (frameCount % INTERVALO_OBSTACULOS === 0) {
+        obstaculos.push(criarObstaculo());
+    }
+    
+    atualizarEDesenharObstaculos();
+    pontuacao++;
+}
+
+function desenharCenario() {
+    // Fundo
+    background(0, 10, 30);
+    
+    // Estrelas
     fill(255, 255, 255, 150);
-    for (let star of backgroundElements) {
-        circle(star.x, star.y, star.size);
-        star.x -= gameSpeed * 0.2;
-        if (star.x < 0) {
-            star.x = width;
-            star.y = random(height - groundHeight);
+    for (let estrela of estrelas) {
+        circle(estrela.x, estrela.y, estrela.tamanho);
+        estrela.x -= VELOCIDADE_JOGO * 0.2;
+        
+        // Reposicionar estrelas que saíram da tela
+        if (estrela.x < 0) {
+            estrela.x = width;
+            estrela.y = random(height - ALTURA_CHAO);
         }
     }
     
-    // Desenhar chão
+    // Chão
     fill(50, 50, 50);
-    rect(0, height - groundHeight, width, groundHeight);
+    rect(0, height - ALTURA_CHAO, width, ALTURA_CHAO);
     
-    // Linhas de grade no chão (estilo Geometry Dash)
+    // Linhas decorativas no chão
     stroke(70, 70, 70);
     for (let i = 0; i < width; i += 50) {
-        line(i, height - groundHeight, i, height);
+        line(i, height - ALTURA_CHAO, i, height);
     }
-    for (let i = height - groundHeight; i < height; i += 10) {
+    for (let i = height - ALTURA_CHAO; i < height; i += 10) {
         line(0, i, width, i);
     }
     noStroke();
+}
+
+function atualizarCubo() {
+    // Aplicar gravidade
+    cubo.velocidade += GRAVIDADE;
+    cubo.y += cubo.velocidade;
     
-    if (!gameOver) {
-        // Aplicar gravidade
-        cube.velocity += gravity;
-        cube.y += cube.velocity;
-        
-        // Verificar colisão com o chão
-        if (cube.y > height - groundHeight - cube.size) {
-            cube.y = height - groundHeight - cube.size;
-            cube.velocity = 0;
-            isJumping = false;
-            cube.rotation = 0;
-        } else {
-            // Verificar se o cubo está no ar (não está no chão nem em uma plataforma)
-            let onPlatform = false;
-            
-            for (let obstacle of obstacles) {
-                if (obstacle.type === 'box') {
-                    if (cube.x < obstacle.x + obstacle.size && 
-                        cube.x + cube.size > obstacle.x && 
-                        abs(cube.y + cube.size - (obstacle.y - obstacle.height)) < 2 &&
-                        cube.velocity >= 0) {
-                        onPlatform = true;
-                        break;
-                    }
-                }
-            }
-            
-            if (!onPlatform) {
-                // Rotacionar cubo ao pular (estilo Geometry Dash)
-                cube.rotation += 0.1;
-                isJumping = true;
-            }
+    // Verificar colisão com o chão
+    if (cubo.y > height - ALTURA_CHAO - cubo.tamanho) {
+        aterrarNoChao();
+    } else {
+        verificarAterragemEmPlataforma();
+    }
+}
+
+function aterrarNoChao() {
+    cubo.y = height - ALTURA_CHAO - cubo.tamanho;
+    cubo.velocidade = 0;
+    estaPulando = false;
+    cubo.rotacao = 0;
+}
+
+function verificarAterragemEmPlataforma() {
+    let sobrePlataforma = false;
+    
+    // Verificar se está sobre alguma plataforma (caixa)
+    for (let obstaculo of obstaculos) {
+        if (obstaculo.tipo === 'caixa' && estaSobrePlataforma(cubo, obstaculo)) {
+            sobrePlataforma = true;
+            break;
         }
-        
-        // Criar novos obstáculos
-        if (frameCount % 60 === 0) {
-            obstacles.push(createObstacle());
-        }
-        
-        // Atualizar e desenhar obstáculos
-        updateAndDrawObstacles();
-        
-        // Atualizar pontuação
-        score++;
     }
     
-    // Desenhar o cubo com rotação
+    // Se estiver no ar, continuar rotacionando
+    if (!sobrePlataforma) {
+        cubo.rotacao += 0.1;
+        estaPulando = true;
+    }
+}
+
+function estaSobrePlataforma(cubo, plataforma) {
+    return cubo.x < plataforma.x + plataforma.tamanho && 
+           cubo.x + cubo.tamanho > plataforma.x && 
+           Math.abs(cubo.y + cubo.tamanho - (plataforma.y - plataforma.altura)) < 2 &&
+           cubo.velocidade >= 0;
+}
+
+function desenharCubo() {
     push();
-    translate(cube.x + cube.size/2, cube.y + cube.size/2);
-    rotate(cube.rotation);
+    translate(cubo.x + cubo.tamanho/2, cubo.y + cubo.tamanho/2);
+    rotate(cubo.rotacao);
+    
+    // Corpo do cubo
     fill(50, 200, 255);
-    rect(-cube.size/2, -cube.size/2, cube.size, cube.size);
+    rect(-cubo.tamanho/2, -cubo.tamanho/2, cubo.tamanho, cubo.tamanho);
+    
+    // Detalhe do cubo
     fill(100, 220, 255);
     triangle(
-        -cube.size/2, -cube.size/2,
-        cube.size/2, -cube.size/2,
-        -cube.size/2, cube.size/2
+        -cubo.tamanho/2, -cubo.tamanho/2,
+        cubo.tamanho/2, -cubo.tamanho/2,
+        -cubo.tamanho/2, cubo.tamanho/2
     );
     pop();
-    
-    // Desenhar pontuação
+}
+
+function mostrarInformacoes() {
+    // Pontuação
     fill(255);
     textSize(32);
-    text('Pontos: ' + Math.floor(score/10), 20, 40);
+    text('Pontos: ' + Math.floor(pontuacao/10), 20, 40);
     
-    // Tela de game over
-    if (gameOver) {
-        textSize(64);
+    // Tela de fim de jogo
+    if (fimDeJogo) {
         textAlign(CENTER);
         fill(255, 0, 0);
+        textSize(64);
         text('FIM DE JOGO', width/2, height/2);
         textSize(32);
         text('Pressione R para reiniciar', width/2, height/2 + 40);
+        textAlign(LEFT);
     }
 }
 
 function keyPressed() {
-    let canJump = !isJumping;
+    if (fimDeJogo) {
+        if (key === 'r' || key === 'R') {
+            reiniciarJogo();
+        }
+        return;
+    }
     
-    // Verificar se está em cima de uma plataforma
-    for (let obstacle of obstacles) {
-        if (obstacle.type === 'box') {
-            if (cube.x < obstacle.x + obstacle.size && 
-                cube.x + cube.size > obstacle.x && 
-                abs(cube.y + cube.size - (obstacle.y - obstacle.height)) < 2 &&
-                cube.velocity >= 0) {
-                canJump = true;
-                break;
-            }
+    // Pular (espaço ou seta para cima)
+    if ((keyCode === 32 || keyCode === UP_ARROW) && podeJogarPular()) {
+        cubo.velocidade = FORCA_PULO;
+        estaPulando = true;
+    }
+}
+
+function podeJogarPular() {
+    // Pode pular se estiver no chão
+    if (!estaPulando) return true;
+    
+    // Ou se estiver em cima de uma plataforma
+    for (let obstaculo of obstaculos) {
+        if (obstaculo.tipo === 'caixa' && estaSobrePlataforma(cubo, obstaculo)) {
+            return true;
         }
     }
     
-    if (!gameOver && (keyCode === 32 || keyCode === UP_ARROW) && canJump) {
-        cube.velocity = jumpPower;
-        isJumping = true;
-    } else if (gameOver && (key === 'r' || key === 'R')) {
-        gameOver = false;
-        obstacles = [];
-        score = 0;
-        cube.y = height - groundHeight - cube.size;
-        cube.velocity = 0;
-        cube.rotation = 0;
-        isJumping = false;
-    }
+    return false;
 }
 
-function drawSpike(x, y, size) {
-    triangle(
-        x, y,
-        x + size, y,
-        x + size/2, y - size
-    );
+function reiniciarJogo() {
+    fimDeJogo = false;
+    obstaculos = [];
+    pontuacao = 0;
+    cubo.y = height - ALTURA_CHAO - cubo.tamanho;
+    cubo.velocidade = 0;
+    cubo.rotacao = 0;
+    estaPulando = false;
 }
 
-function drawBox(x, y, width, height) {
-    // Desenhar caixa com efeito 3D simples
-    fill(80, 200, 80); // Verde para indicar plataforma segura
-    rect(x, y - height, width, height);
-    
-    // Topo da caixa (mais claro)
-    fill(100, 220, 100);
-    rect(x, y - height, width, 10);
-    
-    // Lateral da caixa (mais escura)
-    fill(60, 180, 60);
-    rect(x + width - 10, y - height, 10, height);
-}
-
-function createObstacle() {
-    // Escolher aleatoriamente entre espinho e caixa
-    let type = random() > 0.5 ? 'spike' : 'box';
+function criarObstaculo() {
+    let tipo = random() > 0.5 ? 'espinho' : 'caixa';
     
     return {
         x: width,
-        y: height - groundHeight,
-        size: random(30, 50),
-        type: type,
-        height: type === 'box' ? random(30, 80) : 0 // Altura para caixas
+        y: height - ALTURA_CHAO,
+        tamanho: random(30, 50),
+        tipo: tipo,
+        altura: tipo === 'caixa' ? random(30, 80) : 0
     };
 }
 
-function updateAndDrawObstacles() {
-    for (let i = obstacles.length - 1; i >= 0; i--) {
-        obstacles[i].x -= gameSpeed;
+function atualizarEDesenharObstaculos() {
+    for (let i = obstaculos.length - 1; i >= 0; i--) {
+        let obstaculo = obstaculos[i];
+        obstaculo.x -= VELOCIDADE_JOGO;
         
-        // Desenhar com base no tipo
-        if (obstacles[i].type === 'spike') {
-            // Obstáculo espinho (estilo Geometry Dash)
-            fill(255, 70, 70);
-            drawSpike(obstacles[i].x, obstacles[i].y, obstacles[i].size);
+        // Desenhar obstáculo
+        if (obstaculo.tipo === 'espinho') {
+            desenharEspinho(obstaculo);
         } else {
-            // Caixas para pular em cima
-            fill(80, 200, 80); // Mudando para verde para indicar que são "seguras"
-            drawBox(obstacles[i].x, obstacles[i].y, obstacles[i].size, obstacles[i].height);
+            desenharCaixa(obstaculo);
         }
         
         // Remover obstáculos fora da tela
-        if (obstacles[i].x < -obstacles[i].size) {
-            obstacles.splice(i, 1);
+        if (obstaculo.x < -obstaculo.tamanho) {
+            obstaculos.splice(i, 1);
             continue;
         }
         
         // Verificar colisão
-        let collisionResult = collides(cube, obstacles[i]);
-        
-        if (collisionResult === 'spike-collision') {
-            gameOver = true;
-        } else if (collisionResult === 'box-top-collision') {
-            // Se colidir com o topo da caixa, posicionar o cubo em cima dela
-            cube.y = obstacles[i].y - obstacles[i].height - cube.size;
-            cube.velocity = 0;
-            isJumping = false;
-            cube.rotation = 0;
-        } else if (collisionResult === 'box-side-collision') {
-            // Se colidir com o lado da caixa, tratar como obstáculo normal
-            gameOver = true;
-        }
+        tratarColisao(obstaculo);
     }
 }
 
-function collides(cube, obstacle) {
-    let cubeRight = cube.x + cube.size;
-    let cubeBottom = cube.y + cube.size;
+function desenharEspinho(obstaculo) {
+    fill(255, 70, 70);
+    triangle(
+        obstaculo.x, obstaculo.y,
+        obstaculo.x + obstaculo.tamanho, obstaculo.y,
+        obstaculo.x + obstaculo.tamanho/2, obstaculo.y - obstaculo.tamanho
+    );
+}
+
+function desenharCaixa(obstaculo) {
+    let x = obstaculo.x;
+    let y = obstaculo.y;
+    let largura = obstaculo.tamanho;
+    let altura = obstaculo.altura;
     
-    if (obstacle.type === 'spike') {
-        // Verificação básica de colisão entre cubo e espinho triangular
-        
-        // Primeiro verifica sobreposição retangular simples
-        if (cube.x < obstacle.x + obstacle.size && 
-            cubeRight > obstacle.x && 
-            cubeBottom > obstacle.y - obstacle.size) {
-            
-            // Verifica se o cubo está suficientemente dentro do espinho
-            let spikeTop = obstacle.y - obstacle.size;
-            let spikeCenter = obstacle.x + obstacle.size/2;
-            
-            // Calcula colisão triangular aproximada
-            if (cubeBottom > spikeTop + abs(cube.x + cube.size/2 - spikeCenter) * obstacle.size / (obstacle.size/2)) {
-                return 'spike-collision';
-            }
-        }
+    // Corpo da caixa
+    fill(80, 200, 80);
+    rect(x, y - altura, largura, altura);
+    
+    // Topo (mais claro)
+    fill(100, 220, 100);
+    rect(x, y - altura, largura, 10);
+    
+    // Lateral (mais escura)
+    fill(60, 180, 60);
+    rect(x + largura - 10, y - altura, 10, altura);
+}
+
+function tratarColisao(obstaculo) {
+    let tipoColisao = verificarColisao(cubo, obstaculo);
+    
+    if (tipoColisao === 'colisao-espinho' || tipoColisao === 'colisao-lado-caixa') {
+        fimDeJogo = true;
+    } else if (tipoColisao === 'colisao-topo-caixa') {
+        // Posicionar cubo em cima da caixa
+        cubo.y = obstaculo.y - obstaculo.altura - cubo.tamanho;
+        cubo.velocidade = 0;
+        estaPulando = false;
+        cubo.rotacao = 0;
+    }
+}
+
+function verificarColisao(cubo, obstaculo) {
+    let cuboDireita = cubo.x + cubo.tamanho;
+    let cuboBaixo = cubo.y + cubo.tamanho;
+    
+    if (obstaculo.tipo === 'espinho') {
+        return verificarColisaoEspinho(cubo, cuboDireita, cuboBaixo, obstaculo);
     } else {
-        // Colisão com caixa - verificar se está aterrissando em cima ou colidindo lateralmente
-        if (cube.x < obstacle.x + obstacle.size && 
-            cubeRight > obstacle.x && 
-            cube.y < obstacle.y - obstacle.height &&
-            cubeBottom > obstacle.y - obstacle.height &&
-            cube.velocity >= 0) {
-            // Colisão com o topo da caixa (aterrissagem)
-            return 'box-top-collision';
-        } else if (cube.x < obstacle.x + obstacle.size && 
-                  cubeRight > obstacle.x && 
-                  cube.y < obstacle.y && 
-                  cubeBottom > obstacle.y - obstacle.height) {
-            // Colisão lateral com a caixa
-            return 'box-side-collision';
+        return verificarColisaoCaixa(cubo, cuboDireita, cuboBaixo, obstaculo);
+    }
+}
+
+function verificarColisaoEspinho(cubo, cuboDireita, cuboBaixo, obstaculo) {
+    let dentroAreaEspinho = cubo.x < obstaculo.x + obstaculo.tamanho && 
+                            cuboDireita > obstaculo.x && 
+                            cuboBaixo > obstaculo.y - obstaculo.tamanho;
+    
+    if (dentroAreaEspinho) {
+        // Verificação mais precisa para a forma do triângulo
+        let topoEspinho = obstaculo.y - obstaculo.tamanho;
+        let centroEspinho = obstaculo.x + obstaculo.tamanho/2;
+        let alturaRelativa = Math.abs(cubo.x + cubo.tamanho/2 - centroEspinho) * obstaculo.tamanho / (obstaculo.tamanho/2);
+        
+        if (cuboBaixo > topoEspinho + alturaRelativa) {
+            return 'colisao-espinho';
         }
     }
+    
+    return false;
+}
+
+function verificarColisaoCaixa(cubo, cuboDireita, cuboBaixo, obstaculo) {
+    // Verificar se está em cima da caixa
+    if (estaSobrePlataforma(cubo, obstaculo)) {
+        return 'colisao-topo-caixa';
+    }
+    
+    // Verificar colisão lateral com a caixa
+    let colisaoLateral = cubo.x < obstaculo.x + obstaculo.tamanho && 
+                         cuboDireita > obstaculo.x && 
+                         cubo.y < obstaculo.y && 
+                         cuboBaixo > obstaculo.y - obstaculo.altura;
+    
+    if (colisaoLateral) {
+        return 'colisao-lado-caixa';
+    }
+    
     return false;
 }
 
 function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
-    cube.y = height - groundHeight - cube.size;
+    cubo.y = height - ALTURA_CHAO - cubo.tamanho;
 }
