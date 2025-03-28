@@ -6,6 +6,7 @@ const VELOCIDADE_JOGO = 5;
 const QTD_ESTRELAS = 20;
 const INTERVALO_OBSTACULOS = 60; // frames
 const PONTOS_POR_PULO = 10; // Pontos ganhos a cada pulo
+const TECLA_FULLSCREEN = 70; // Tecla 'F' para fullscreen
 
 // Estado do jogo
 let pontuacao = 0;
@@ -21,6 +22,18 @@ let estaPulando = false;
 
 function setup() {
     createCanvas(windowWidth, windowHeight);
+    
+    // Remover bordas e margens do corpo da página e do canvas
+    document.body.style.margin = '0';
+    document.body.style.padding = '0';
+    document.body.style.overflow = 'hidden';
+    
+    // Estilizar o canvas para ocupar toda a tela sem bordas
+    let canvasElement = document.querySelector('canvas');
+    if (canvasElement) {
+        canvasElement.style.display = 'block';
+        canvasElement.style.position = 'absolute';
+    }
     
     // Inicializar o jogador
     cubo = {
@@ -149,9 +162,10 @@ function verificarAterragemEmPlataforma() {
 }
 
 function estaSobrePlataforma(cubo, plataforma) {
-    return cubo.x < plataforma.x + plataforma.tamanho && 
-           cubo.x + cubo.tamanho > plataforma.x && 
-           Math.abs(cubo.y + cubo.tamanho - (plataforma.y - plataforma.altura)) < 2 &&
+    // Verifica se o cubo está diretamente em cima da plataforma
+    return cubo.x + cubo.tamanho > plataforma.x && 
+           cubo.x < plataforma.x + plataforma.tamanho && 
+           Math.abs(cubo.y + cubo.tamanho - (plataforma.y - plataforma.altura)) <= 2 &&
            cubo.velocidade >= 0;
 }
 
@@ -183,6 +197,10 @@ function mostrarInformacoes() {
     // Tempo de jogo
     text('Tempo: ' + formatarTempo(tempoJogo), 20, 80);
     
+    // Informação sobre fullscreen
+    textSize(16);
+    text('Pressione F para tela cheia', 20, height - 60);
+    
     // Tela de fim de jogo
     if (fimDeJogo) {
         textAlign(CENTER);
@@ -209,6 +227,12 @@ function formatarTempo(segundos) {
 }
 
 function keyPressed() {
+    // Tecla para alternar modo de tela cheia
+    if (keyCode === TECLA_FULLSCREEN) {
+        toggleFullscreen();
+        return;
+    }
+    
     if (fimDeJogo) {
         if (key === 'r' || key === 'R') {
             reiniciarJogo();
@@ -223,6 +247,29 @@ function keyPressed() {
         // Aumentar a pontuação quando o jogador pula
         pontuacao += PONTOS_POR_PULO;
     }
+}
+
+// Função para alternar entre modo tela cheia e modo normal
+function toggleFullscreen() {
+    let fs = fullscreen();
+    fullscreen(!fs);
+    
+    // Ajustar o canvas quando o modo de exibição mudar
+    setTimeout(() => {
+        // Reajustar o canvas para garantir que ele preencha toda a tela
+        resizeCanvas(windowWidth, windowHeight);
+        
+        // Forçar o HTML e o body a não ter margens ou barras de rolagem
+        document.documentElement.style.margin = '0';
+        document.documentElement.style.padding = '0';
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.margin = '0';
+        document.body.style.padding = '0';
+        document.body.style.overflow = 'hidden';
+        
+        // Reposicionar o jogador
+        cubo.y = height - ALTURA_CHAO - cubo.tamanho;
+    }, 100);
 }
 
 function podeJogarPular() {
@@ -359,18 +406,29 @@ function verificarColisaoEspinho(cubo, cuboDireita, cuboBaixo, obstaculo) {
 }
 
 function verificarColisaoCaixa(cubo, cuboDireita, cuboBaixo, obstaculo) {
-    // Verificar se está em cima da caixa
-    if (estaSobrePlataforma(cubo, obstaculo)) {
+    // Definir a área da caixa
+    let caixaEsquerda = obstaculo.x;
+    let caixaDireita = obstaculo.x + obstaculo.tamanho;
+    let caixaTopo = obstaculo.y - obstaculo.altura;
+    let caixaBaixo = obstaculo.y;
+    
+    // Verificar se há sobreposição nas coordenadas x
+    let sobreposicaoX = cubo.x < caixaDireita && cuboDireita > caixaEsquerda;
+    
+    if (!sobreposicaoX) return false; // Sem colisão
+    
+    // Verificar colisão com o topo (permitido pular em cima)
+    // O cubo deve estar caindo (velocidade >= 0) e sua base deve estar próxima ao topo da caixa
+    if (cubo.velocidade >= 0 && 
+        cuboBaixo >= caixaTopo && 
+        cuboBaixo <= caixaTopo + 10 && // Uma pequena margem para detecção
+        cubo.y < caixaTopo) {
         return 'colisao-topo-caixa';
     }
     
-    // Verificar colisão lateral com a caixa
-    let colisaoLateral = cubo.x < obstaculo.x + obstaculo.tamanho && 
-                         cuboDireita > obstaculo.x && 
-                         cubo.y < obstaculo.y && 
-                         cuboBaixo > obstaculo.y - obstaculo.altura;
-    
-    if (colisaoLateral) {
+    // Verificar colisão lateral (deve matar o jogador)
+    // Há sobreposição em x e y ao mesmo tempo, mas não é uma colisão de topo
+    if (cubo.y < caixaBaixo && cuboBaixo > caixaTopo) {
         return 'colisao-lado-caixa';
     }
     
@@ -378,6 +436,27 @@ function verificarColisaoCaixa(cubo, cuboDireita, cuboBaixo, obstaculo) {
 }
 
 function windowResized() {
-    resizeCanvas(windowWidth, windowHeight);
+    // Ajustar as dimensões do canvas para corresponder à janela
+    let targetWidth = windowWidth;
+    let targetHeight = windowHeight;
+    
+    // Garantir que o canvas ocupe exatamente a tela inteira
+    resizeCanvas(targetWidth, targetHeight);
+    
+    // Reposicionar o jogador
     cubo.y = height - ALTURA_CHAO - cubo.tamanho;
+    
+    // Reajustar qualquer elemento CSS para evitar barras de rolagem
+    document.body.style.margin = '0';
+    document.body.style.padding = '0';
+    document.body.style.overflow = 'hidden';
 }
+
+// Função que será chamada quando o modo fullscreen mudar
+document.addEventListener('fullscreenchange', function() {
+    if (!document.fullscreenElement) {
+        // Saiu do modo fullscreen
+        resizeCanvas(windowWidth, windowHeight);
+        cubo.y = height - ALTURA_CHAO - cubo.tamanho;
+    }
+});
