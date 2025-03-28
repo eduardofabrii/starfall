@@ -5,10 +5,13 @@ const ALTURA_CHAO = 50;
 const VELOCIDADE_JOGO = 5;
 const QTD_ESTRELAS = 20;
 const INTERVALO_OBSTACULOS = 60; // frames
+const PONTOS_POR_PULO = 10; // Pontos ganhos a cada pulo
 
 // Estado do jogo
 let pontuacao = 0;
 let fimDeJogo = false;
+let tempoJogo = 0; // Tempo em segundos
+let ultimoSegundo = 0; // Para contar os segundos
 
 // Objetos do jogo
 let cubo;
@@ -30,6 +33,10 @@ function setup() {
     
     criarEstrelas();
     noStroke();
+    
+    // Inicializar o tempo
+    tempoJogo = 0;
+    ultimoSegundo = 0;
 }
 
 function criarEstrelas() {
@@ -62,7 +69,13 @@ function atualizarJogo() {
     }
     
     atualizarEDesenharObstaculos();
-    pontuacao++;
+    
+    // Atualizar o tempo de jogo (a cada segundo)
+    let segundoAtual = Math.floor(millis() / 1000);
+    if (segundoAtual > ultimoSegundo) {
+        tempoJogo++;
+        ultimoSegundo = segundoAtual;
+    }
 }
 
 function desenharCenario() {
@@ -165,7 +178,10 @@ function mostrarInformacoes() {
     // Pontuação
     fill(255);
     textSize(32);
-    text('Pontos: ' + Math.floor(pontuacao/10), 20, 40);
+    text('Pontos: ' + pontuacao, 20, 40);
+    
+    // Tempo de jogo
+    text('Tempo: ' + formatarTempo(tempoJogo), 20, 80);
     
     // Tela de fim de jogo
     if (fimDeJogo) {
@@ -175,8 +191,21 @@ function mostrarInformacoes() {
         text('FIM DE JOGO', width/2, height/2);
         textSize(32);
         text('Pressione R para reiniciar', width/2, height/2 + 40);
+        text('Tempo de jogo: ' + formatarTempo(tempoJogo), width/2, height/2 + 80);
         textAlign(LEFT);
     }
+}
+
+// Função para formatar o tempo em mm:ss
+function formatarTempo(segundos) {
+    let minutos = Math.floor(segundos / 60);
+    let segundosRestantes = segundos % 60;
+    
+    // Adicionar zero à esquerda se necessário
+    let minutosStr = minutos < 10 ? '0' + minutos : minutos;
+    let segundosStr = segundosRestantes < 10 ? '0' + segundosRestantes : segundosRestantes;
+    
+    return minutosStr + ':' + segundosStr;
 }
 
 function keyPressed() {
@@ -191,6 +220,8 @@ function keyPressed() {
     if ((keyCode === 32 || keyCode === UP_ARROW) && podeJogarPular()) {
         cubo.velocidade = FORCA_PULO;
         estaPulando = true;
+        // Aumentar a pontuação quando o jogador pula
+        pontuacao += PONTOS_POR_PULO;
     }
 }
 
@@ -212,6 +243,8 @@ function reiniciarJogo() {
     fimDeJogo = false;
     obstaculos = [];
     pontuacao = 0;
+    tempoJogo = 0;
+    ultimoSegundo = Math.floor(millis() / 1000);
     cubo.y = height - ALTURA_CHAO - cubo.tamanho;
     cubo.velocidade = 0;
     cubo.rotacao = 0;
